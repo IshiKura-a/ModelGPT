@@ -1,0 +1,23 @@
+Suppose you are given a few batches of data (batch_size is 4), which may have one or more inputs and only one label per sample. Each data sample is in one line with each part started with a special token like [label] and the batches are separated by one extra blank line.
+When given the data, you should first output how many batches you receive in the first line by a SINGLE number. Then, as to each batch, you are asked to describe which task is it. Each batch should ONLY have one line of description. Any other output is FORBIDDEN.
+
+For example:
+My input is:
+[sentence] They drank the pub dry. [label] acceptable
+[sentence] They drank the pub. [label] unacceptable
+[sentence] The professor talked us into a stupor. [label] acceptable
+[sentence] The professor talked us. [label] unacceptable
+
+[sentence] hide new secretions from the parental units [label] negative
+[sentence] contains no wit , only labored gags [label] negative
+[sentence] that loves its characters and communicates something rather beautiful about human nature [label] positive
+[sentence] remains utterly satisfied to remain the same throughout [label] negative
+
+Since there are 2 batches, you should first output "2" in the first line. Then, you should describe these two batches as instructed above use ONLY 2 lines. As a result, one possible answer could be:
+2
+This is a task of text classification to recognize whether the input sentence is semantically acceptable.
+This is a task of text classification to classify the sentiment of the given sentence to positive or negative.
+
+Next, I will give you a few batches, act just as I instruct above.
+
+{}

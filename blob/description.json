@@ -1,0 +1,65 @@
+{
+  "cola": [
+    "This is a task of text classification to recognize whether the input sentence is semantically acceptable.",
+    "This is a task of text classification to recognize whether the input sentence is semantically acceptable.",
+    "This is a task of text classification to recognize whether the input sentence is semantically acceptable.",
+    "This is a task of text classification to recognize whether the input sentence is semantically acceptable.",
+    "This is a task of text classification to recognize whether the input sentence is semantically acceptable."
+  ],
+  "mnli": [
+    "This is a task of natural language inference to determine the logical relationship between a premise and a hypothesis.",
+    "This is a task of natural language inference to determine the semantic relationship between the premise and hypothesis sentences.",
+    "This is a task of natural language inference to determine the logical relationship between the premise and hypothesis sentences.",
+    "This is a task of natural language inference to determine the relationship between the premise and hypothesis sentences.",
+    "This is a task of natural language inference to determine the logical relationship between the premise and hypothesis."
+  ],
+  "mrpc": [
+    "This is a task of text classification to recognize whether the two input sentences are equivalent or not.",
+    "This is a task of text classification to determine whether two input sentences are semantically equivalent.",
+    "This is a task of sentence pair classification to determine whether the two sentences are semantically equivalent.",
+    "This is a task of text classification to determine whether the two input sentences are equivalent in meaning.",
+    "This is a task of text classification to recognize whether the two input sentences are equivalent or not."
+  ],
+  "qnli": [
+    "This is a task of text classification to determine whether the given question and sentence entail each other.",
+    "This is a task of natural language inference to determine whether the question entails or does not entail the information provided in the sentence.",
+    "This is a task of text classification to determine whether the given question and sentence are entailing each other.",
+    "This is a task of natural language inference to determine the logical relationship between a given question and sentence.",
+    "This is a task of natural language inference to determine the relationship between a question and a sentence."
+  ],
+  "qqp": [
+    "This is a task of text classification to determine whether two questions are duplicates or not.",
+    "This is a task of text classification to determine whether pairs of questions are duplicate or not.",
+    "This is a task of text classification to determine whether two given questions are duplicates or not.",
+    "This is a task of question pair classification to determine whether the two input questions are duplicate or not.",
+    "This is a task of duplicate question detection to determine whether the two input questions are duplicates of each other."
+  ],
+  "rte": [
+    "This is a task of text classification to determine whether the two input sentences convey equivalent meanings.",
+    "This is a task of sentence pair classification to determine whether the two sentences are semantically equivalent or not.",
+    "This is a task of text classification to determine whether the two input sentences are semantically equivalent.",
+    "This is a task of text classification to determine whether the two input sentences are equivalent in meaning.",
+    "This is a task of text classification to determine whether the two input sentences are equivalent in meaning."
+  ],
+  "sst2": [
+    "This is a task of sentiment analysis to determine whether the input sentence has a positive or negative sentiment.",
+    "This is a task of sentiment analysis to determine the negative sentiment of the input sentences.",
+    "This is a task of sentiment analysis to determine the negative sentiment of the input sentences.",
+    "This is a task of sentiment analysis to determine whether the input sentence conveys a positive or negative sentiment.",
+    "This is a task of sentiment analysis to determine whether the input sentences have a positive or negative sentiment."
+  ],
+  "stsb": [
+    "This is a task of regression to predict a numerical value based on the relationship between two input sentences.",
+    "This is a task of regression to predict a numerical value based on the input sentences.",
+    "This is a task of regression to predict the similarity score between two sentences.",
+    "This is a task of regression to predict the similarity score between two sentences.",
+    "This is a task of regression to predict a numerical value based on the input sentences."
+  ],
+  "wnli": [
+    "This is a task of textual entailment to determine whether the second sentence logically follows from the first sentence.",
+    "This is a task of natural language inference to determine whether the first sentence entails the second sentence.",
+    "This is a task of natural language inference to determine the entailment relationship between two sentences.",
+    "This is a task of natural language inference to determine whether the second sentence logically follows from the first sentence.",
+    "This is a task of natural language inference to determine whether the relationship between sentence1 and sentence2 is entailment or not_entailment."
+  ]
+}

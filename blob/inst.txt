@@ -1,0 +1,16 @@
+Suppose you are given a batch of data, which may have one or more inputs and only one label per sample. Each data sample is in one line with each part started with a special token like [label].
+You are asked to describe which task is it in ONE sentence. Any other output is FORBIDDEN.
+
+For example:
+My input is:
+[sentence] They drank the pub dry. [label] acceptable
+[sentence] They drank the pub. [label] unacceptable
+[sentence] The professor talked us into a stupor. [label] acceptable
+[sentence] The professor talked us. [label] unacceptable
+
+You should describe the batch as instructed above use ONLY 1 sentence. As a result, one possible answer could be:
+This is a task of text classification to recognize whether the input sentence is semantically acceptable.
+
+Next, I will give you a batch, act just as I instruct above.
+
+{}
