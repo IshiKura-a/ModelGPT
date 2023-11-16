@@ -1,0 +1,31 @@
+{
+  "train_batch_size": 64,
+  "zero_optimization": {
+    "stage": 3,
+    "contiguous_gradients": true,
+    "stage3_max_live_parameters": 1e9,
+    "stage3_max_reuse_distance": 1e9,
+    "stage3_prefetch_bucket_size": 1e7,
+    "stage3_param_persistence_threshold": 1e5,
+    "reduce_bucket_size": 1e7,
+    "sub_group_size": 1e9,
+    "offload_optimizer": {
+      "device": "cpu"
+    },
+    "offload_param": {
+      "device": "cpu"
+    }
+  },
+  "optimizer": {
+    "type": "Adam",
+    "params": {
+      "lr": 1e-5,
+      "betas": [
+        0.8,
+        0.999
+      ],
+      "eps": 1e-8,
+      "weight_decay": 0
+    }
+  }
+}

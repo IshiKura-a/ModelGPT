@@ -2,38 +2,33 @@ import argparse
 import logging
 import os
 import tracemalloc
-from logging.handlers import QueueListener
-from multiprocessing import get_context
 from pathlib import Path
 from typing import Any, Tuple
-
-from collections import OrderedDict as Odict
 
 import torch
 from datasets import load_dataset, Dataset, DatasetDict
 from torch import optim, is_tensor, nn
-from torch.multiprocessing.queue import Queue
-from torch.optim.lr_scheduler import ConstantLR
+from torch.optim.lr_scheduler import ConstantLR, CosineAnnealingLR
 from torch.utils.data import DataLoader, DistributedSampler
 from torch import multiprocessing as mp
 from torch import distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
-from torchvision.models import ResNet
 from tqdm import tqdm
 from transformers import DistilBertTokenizer, DistilBertForSequenceClassification, AutoConfig, AutoTokenizer, \
     AutoModelForSequenceClassification, DistilBertModel, PreTrainedTokenizer
-
+# import bitsandbytes as bnb
 from baseline.glue import preprocess_fn
 from dataset.glue import get_preprocess_fn, get_num_labels
-from model.hyper_network import DistilBertFCHYN, HyperNetwork
+from model.hyper_network import DistilBertFCHYN, HyperNetwork, MultiHeadLMFCHYN
 from model.summarizer import MockSummarizer
 from util.criteria import CrossEntropy, Accuracy, Compose, MSELoss
 from util.logger import print_args, logger
-from util.trainer import TrainingArguments, GLUETrainer, seed_everything, HyperTrainer, get_dataloader
+from util.trainer import TrainingArguments, GLUETrainer, seed_everything, HyperTrainer, get_dataloader, \
+    collect_parameters
 
 
 def task_init(task_name: str, args: argparse.Namespace) -> Tuple[nn.Module, PreTrainedTokenizer, DatasetDict]:
-    d = load_dataset('/home/tangzihao/glue', task_name)
+    d = load_dataset('/root/data/dataset/glue', task_name)
     num_labels = get_num_labels(task_name)
 
     config = AutoConfig.from_pretrained(
@@ -61,10 +56,15 @@ def main(rank: int, world_size: int, args: argparse.Namespace):
     loader_kwargs = {'batch_size': args.batch_size, 'num_workers': 4, 'pin_memory': True}
 
     trainers = []
-    # task_list = tqdm(['cola', 'mnli', 'mrpc', 'qnli', 'qqp', 'rte', 'sst2', 'stsb', 'wnli'])
-    task_list = tqdm(['cola', 'mrpc', 'qnli', 'rte', 'sst2', 'stsb', 'wnli', 'qqp', 'mnli'])
+    target_parameter = {}
+    # task_list = ['stsb']
+    task_list = ['cola', 'mnli', 'mrpc', 'qnli', 'qqp', 'rte', 'sst2', 'stsb', 'wnli']
+    # task_list = ['cola', 'mrpc', 'qnli', 'rte', 'sst2', 'stsb', 'wnli']
+    if rank == 0:
+        task_list = tqdm(task_list)
     for task_name in task_list:
-        task_list.set_description(f'Current: {task_name}')
+        if rank == 0:
+            task_list.set_description(f'Current: {task_name}')
         num_labels = get_num_labels(task_name)
         if num_labels == 1:
             criteria = MSELoss()
@@ -73,7 +73,6 @@ def main(rank: int, world_size: int, args: argparse.Namespace):
             criteria = CrossEntropy()
             eval_metrics = Compose([CrossEntropy(), Accuracy()])
         model, tokenizer, d = task_init(task_name, args)
-
         val_key = 'validation_matched' if task_name == 'mnli' else 'validation'
         test_key = 'test_matched' if task_name == 'mnli' else 'test'
         train_loader = get_dataloader(d['train'], True, args.mp, loader_kwargs)
@@ -85,17 +84,14 @@ def main(rank: int, world_size: int, args: argparse.Namespace):
             val_loader['mnli-mm'] = get_dataloader(d['validation_mismatched'], False, args.mp, loader_kwargs)
             test_loader['mnli-mm'] = get_dataloader(d['test_mismatched'], False, args.mp, loader_kwargs)
             test_loader['ax'] = get_dataloader(ax_d['test'], False, args.mp, loader_kwargs)
-
         train_args = TrainingArguments(do_train=False,
                                        do_eval=False,
                                        do_test=False,
                                        n_epochs=0,
                                        mp=args.mp,
                                        rank=rank)
-        parameters = []
-        parameters.extend(model.pre_classifier.parameters())
-        parameters.extend(model.dropout.parameters())
-        parameters.extend(model.classifier.parameters())
+        parameters, t = collect_parameters(model, ['pre_classifier', 'classifier'])
+        target_parameter[task_name] = t
         # model = DDP(model.cuda()) if args.mp else model.cuda()
         optimizer = optim.Adam(parameters, lr=args.t_lr, weight_decay=args.t_wd)
         scheduler = ConstantLR(optimizer)
@@ -124,21 +120,21 @@ def main(rank: int, world_size: int, args: argparse.Namespace):
                                    rank=rank)
     encoder = DistilBertModel.from_pretrained(args.backbone)
     tokenizer = DistilBertTokenizer.from_pretrained(args.backbone)
-    target_parameters = Odict({})
-    p_list = trainers[0].model.pre_classifier.named_parameters()
-    for k, v in p_list:
-        target_parameters[f'pre_classifier.{k}'] = v.shape
 
-    logger.info(f'target_parameters: {target_parameters}')
-    net = DistilBertFCHYN(encoder=encoder,
-                          embedding_size=768,
-                          hidden_dim=1024,
-                          target_parameter=target_parameters,
-                          fc_info=('classifier', 768)
-                          )
+    if rank == 0:
+        logger.info(f'target_parameters: {target_parameter}')
+    net = MultiHeadLMFCHYN(encoder=encoder,
+                           embedding_size=768,
+                           hidden_dim=512,
+                           target_parameter=target_parameter,
+                           # split_model=True
+                           )
     net = DDP(net.cuda(), gradient_as_bucket_view=True) if args.mp else net.cuda()
+
     optimizer = optim.Adam(net.parameters(), lr=args.lr, weight_decay=args.wd)
-    scheduler = ConstantLR(optimizer)
+    # optimizer = bnb.optim.Adam8bit(net.parameters(), lr=args.lr, weight_decay=args.wd)
+    scheduler = CosineAnnealingLR(optimizer, T_max=args.epoch)
+    # scheduler = ConstantLR(optimizer)
     h_trainer = HyperTrainer(args=train_args,
                              model=net,
                              summarizer=MockSummarizer(f'./blob/description.json'),
@@ -174,19 +170,20 @@ def ddp_setup(rank: int, world_size: int):
 
 if __name__ == '__main__':
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
+    os.environ["NCCL_P2P_DISABLE"] = "1"
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--mp', action='store_true', default=True)
+    parser.add_argument('--mp', action='store_true', default=False)
     parser.add_argument('--seed', type=int, default=2024)
-    parser.add_argument('--backbone', type=str, default='/data/home/tangzihao/model/distilbert-base-uncased')
-    parser.add_argument('--output_dir', type=str, default=f'/data/home/tangzihao/model/modelGPT')
+    parser.add_argument('--backbone', type=str, default='/root/data/model/distilbert-base-uncased')
+    parser.add_argument('--output_dir', type=str, default=f'/root/data/model/modelGPT/nlp')
 
-    parser.add_argument('--lr', type=float, default=2e-5)
-    parser.add_argument('--wd', type=float, default=1e-4)
-    parser.add_argument('--epoch', type=int, default=5)
-    parser.add_argument('--batch_size', type=int, default=64)
-    parser.add_argument('--t_lr', type=float, default=1e-4)
-    parser.add_argument('--t_wd', type=float, default=1e-4)
+    parser.add_argument('--lr', type=float, default=5e-5)
+    parser.add_argument('--wd', type=float, default=0)
+    parser.add_argument('--epoch', type=int, default=8)
+    parser.add_argument('--batch_size', type=int, default=128)
+    parser.add_argument('--t_lr', type=float, default=1e-5)
+    parser.add_argument('--t_wd', type=float, default=0)
 
     args = parser.parse_args()
 

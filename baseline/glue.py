@@ -109,18 +109,18 @@ def run(task_name: str,
 
 def main():
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
-    # for task_name in ['cola', 'mnli', 'mrpc', 'qnli', 'qqp', 'rte', 'sst2', 'stsb', 'wnli']:
-    #     run(task_name, True, True, True, '/data/home/tangzihao/model/distilbert-base-uncased',
-    #         '/data/home/tangzihao/model/distilbert-base-uncased', 2024, f'/data/home/tangzihao/model/distilbert_glue/',
-    #         True)
-    #
-    # for task_name in ['mnli_mismatched', 'ax']:
-    #     run(task_name, False, False, True, '/data/home/tangzihao/model/distilbert_glue/mnli.pt',
-    #         '/data/home/tangzihao/model/distilbert-base-uncased', 2024, f'/data/home/tangzihao/model/distilbert_glue/',
-    #         True)
-    run('stsb', True, True, False, '/data/home/tangzihao/model/distilbert-base-uncased',
-        '/data/home/tangzihao/model/distilbert-base-uncased', 2024, f'/data/home/tangzihao/model/distilbert_glue/',
-        True)
+    for task_name in ['cola', 'mnli', 'mrpc', 'qnli', 'qqp', 'rte', 'sst2', 'stsb', 'wnli']:
+        run(task_name, True, True, True, '/data/home/tangzihao/model/distilbert-base-uncased',
+            '/data/home/tangzihao/model/distilbert-base-uncased', 2024, f'/data/home/tangzihao/model/distilbert_glue/',
+            True)
+
+    for task_name in ['mnli_mismatched', 'ax']:
+        run(task_name, False, False, True, '/data/home/tangzihao/model/distilbert_glue/mnli.pt',
+            '/data/home/tangzihao/model/distilbert-base-uncased', 2024, f'/data/home/tangzihao/model/distilbert_glue/',
+            True)
+    # run('stsb', True, True, False, '/data/home/tangzihao/model/distilbert-base-uncased',
+    #     '/data/home/tangzihao/model/distilbert-base-uncased', 2024, f'/data/home/tangzihao/model/distilbert_glue/',
+    #     True)
 
 
 if __name__ == '__main__':

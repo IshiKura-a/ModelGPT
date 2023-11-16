@@ -11,12 +11,14 @@ from transformers import DistilBertModel
 
 class HyperNetwork(nn.Module):
     def __init__(self, encoder: nn.Module, embedding_size: int, hidden_dim: int,
-                 target_parameter: Dict[str, Any]):
+                 target_parameter: Dict[str, Any], split_model: bool = False):
         super().__init__()
         self.embedding_size = embedding_size
         self.hidden_dim = hidden_dim
         self.encoder = encoder
         self.target_parameter = target_parameter
+
+        self.split_model = split_model
 
     @abstractmethod
     def forward(self, inputs: Tensor) -> Dict:
@@ -106,8 +108,9 @@ class MultiHeadLMFCHYN(HyperNetwork):
                  embedding_size: int,
                  hidden_dim: int,
                  target_parameter: Dict[str, Dict[str, torch.Size]],
+                 split_model: bool = False
                  ):
-        super().__init__(encoder, embedding_size, hidden_dim, target_parameter)
+        super().__init__(encoder, embedding_size, hidden_dim, target_parameter, split_model)
 
         hidden_size = [hidden_dim, hidden_dim, hidden_dim]
 
@@ -124,14 +127,29 @@ class MultiHeadLMFCHYN(HyperNetwork):
         self.mlp = nn.Sequential(*layers)
         self.target_parameter = target_parameter
 
-        self.task_head = {
+        self.task_head = nn.ModuleDict({
             k: ParameterGenerationBlock(self.hidden_dim, v) for k, v in target_parameter.items()
-        }
+        })
 
     def forward(self, **kwargs) -> Dict:
         t = kwargs['task_name']
         del kwargs['task_name']
 
+        if self.split_model:
+            kwargs = {k: v.to('cuda:1') for k, v in kwargs.items()}
         x = self.encoder(**kwargs)[0][:, 0]
-        x = self.mlp(x)
-        return self.task_head[t](x)
+
+        if self.split_model:
+            x = self.mlp(x)
+            return self.task_head[t](x)
+        else:
+            x = self.mlp(x)
+            return self.task_head[t](x)
+
+    def to(self, *args, **kwargs):
+        if self.split_model:
+            self.encoder.to('cuda:1')
+            self.mlp.to('cuda:1')
+            self.task_head.to('cuda:1')
+        else:
+            super().to(*args, **kwargs)

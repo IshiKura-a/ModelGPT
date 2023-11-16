@@ -1,10 +1,12 @@
 import collections
 import os
 import random
+import time
 from abc import abstractmethod, ABC
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from pathlib import Path
+from pickle import dump
 from typing import Optional, Any, Union, Tuple, List, Dict, Callable
 
 import numpy as np
@@ -18,6 +20,7 @@ from transformers import PreTrainedTokenizer
 
 from dataset.glue import get_num_labels
 from model.summarizer import Summarizer
+from util import rsetattr
 from util.criteria import Metric, Compose
 from util.logger import logger
 
@@ -35,6 +38,8 @@ class TrainingArguments:
     device: str
     mp: bool
     rank: int
+    deepspeed: bool
+    fp16: bool
 
     def __init__(self,
                  do_train: bool,
@@ -48,7 +53,9 @@ class TrainingArguments:
                  show_progress: bool = True,
                  device: str = 'cuda',
                  mp: bool = False,
-                 rank: int = 0
+                 rank: int = 0,
+                 use_deepspeed: bool = False,
+                 fp16: bool = False
                  ):
         self.do_train = do_train
         self.do_eval = do_eval
@@ -62,6 +69,8 @@ class TrainingArguments:
         self.device = device
         self.mp = mp
         self.rank = rank
+        self.deepspeed = use_deepspeed
+        self.fp16 = fp16
 
 
 class BaseTrainer(ABC):
@@ -159,6 +168,15 @@ class BaseTrainer(ABC):
             torch.save(self.model.module.state_dict(), os.path.join(self.args.output_dir, f'{self.task_name}.pt'))
         else:
             torch.save(self.model.state_dict(), os.path.join(self.args.output_dir, f'{self.task_name}.pt'))
+
+    def _load_checkpoint(self):
+        if self.args.deepspeed:
+            _, res = self.model.load_checkpoint(self.args.output_dir, f'{self.task_name}_ds')
+            return res
+        else:
+            res = torch.load(os.path.join(self.args.output_dir, f'{self.task_name}_ckpt.pt'))
+            self.model.load_state_dict(torch.load(res['state_dict_dir'], map_location=lambda storage, loc: storage))
+            return res
 
 
 class GLUETrainer(BaseTrainer):
@@ -336,9 +354,9 @@ class HyperTrainer(BaseTrainer):
         self.n_local_updates = n_local_updates
 
     def train(self, task: int, epoch: int):
-        target_trainer = self.target_trainer[task]
-        loader = target_trainer.train_loader
-        self.set_train([self.model, target_trainer.model])
+        tt = self.target_trainer[task]
+        loader = tt.train_loader
+        self.set_train([self.model, tt.model])
 
         if self.args.mp:
             loader.sampler.set_epoch(epoch)
@@ -352,52 +370,51 @@ class HyperTrainer(BaseTrainer):
                 y = batch[1]
                 z = batch[2]
 
-                pattern = self.summarizer(z, task_name=[target_trainer.task_name])
+                pattern = self.summarizer(z, task_name=[tt.task_name])
                 pattern = self.tokenizer(pattern, padding='max_length', max_length=128, truncation=True,
                                          return_tensors='pt')
                 pattern = {k: v.to(self.args.device) for k, v in pattern.items()}
 
-                outputs = self.model(**pattern, num_labels=get_num_labels(target_trainer.task_name))
-                d = target_trainer.model.state_dict()
+                outputs = self.model(**pattern, task_name=tt.task_name)
+                d = tt.model.state_dict()
                 d.update(outputs)
-                target_trainer.model.load_state_dict(d)
+                tt.model.load_state_dict(d)
 
-                target_trainer.eval_metrics.reset()
+                tt.eval_metrics.reset()
                 for _ in range(self.n_local_updates):
-                    target_trainer.criteria.reset()
-                    t_outputs = target_trainer.model(**x).logits
-                    local_loss = target_trainer.criteria.update(t_outputs, y).get_results()
+                    tt.criteria.reset()
+                    t_outputs = tt.model(**x).logits
+                    local_loss = tt.criteria.update(t_outputs, y).get_results()
                     with torch.no_grad():
-                        target_trainer.eval_metrics.update(t_outputs, y)
-                    if self.args.show_progress:
-                        loader.set_description(
-                            '[Train] epoch: {:04} [{}] {}'.format(epoch, target_trainer.task_name,
-                                                                  target_trainer.eval_metrics))
-                    target_trainer.optimizer.zero_grad()
+                        tt.eval_metrics.update(t_outputs, y)
+                        if self.args.show_progress:
+                            loader.set_description(
+                                '[Train] epoch: {:04} [{}] {}'.format(epoch, tt.task_name,
+                                                                      tt.eval_metrics))
+                    tt.optimizer.zero_grad()
                     local_loss.backward()
-                    target_trainer.optimizer.step()
-                    target_trainer.scheduler.step()
-                target_trainer.criteria.reset()
+                    tt.optimizer.step()
+                    tt.scheduler.step()
+                    del t_outputs, local_loss
 
+                tt.criteria.reset()
                 self.optimizer.zero_grad()
-                final_state = target_trainer.model.state_dict()
+                final_state = tt.model.state_dict()
+
                 delta_theta = {
-                    k: outputs[k] - final_state[k] for k in outputs.keys()
+                    k: outputs[k] - final_state[k].to(outputs[k].device) for k in outputs.keys()
                 }
 
-                hyn_grads = torch.autograd.grad(
-                    list(outputs.values()), self.model.parameters(), grad_outputs=list(delta_theta.values()),
-                    allow_unused=True
-                )
-
-                for p, g in zip(self.model.parameters(), hyn_grads):
-                    p.grad = g
-
+                torch.autograd.backward(list(outputs.values()), grad_tensors=list(delta_theta.values()))
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), 50)
                 self.optimizer.step()
-                self.scheduler.step()
+                self.optimizer.zero_grad()
+                # self.scheduler.step()
 
-        target_trainer.eval_metrics.reset()
+        self.model.zero_grad(set_to_none=True)
+        tt.optimizer.state = collections.defaultdict(dict)
+        tt.model.zero_grad(set_to_none=True)
+        tt.eval_metrics.reset()
         torch.cuda.empty_cache()
 
     def eval(self, task: int, epoch: int,
@@ -424,7 +441,7 @@ class HyperTrainer(BaseTrainer):
                                              return_tensors='pt')
                     pattern = {k: v.to(self.args.device) for k, v in pattern.items()}
 
-                    outputs = self.model(**pattern, num_labels=get_num_labels(target_trainer.task_name))
+                    outputs = self.model(**pattern, task_name=target_trainer.task_name)
 
                     d = target_trainer.model.state_dict()
                     d.update(outputs)
@@ -459,7 +476,7 @@ class HyperTrainer(BaseTrainer):
                                              return_tensors='pt')
                     pattern = {k: v.to(self.args.device) for k, v in pattern.items()}
 
-                    outputs = self.model(**pattern, num_labels=get_num_labels(target_trainer.task_name))
+                    outputs = self.model(**pattern, task_name=target_trainer.task_name)
                     d = target_trainer.model.state_dict()
                     d.update(outputs)
                     target_trainer.model.load_state_dict(d)
@@ -485,11 +502,11 @@ class HyperTrainer(BaseTrainer):
         res = {}
         for epoch in range(epoch_offset, self.args.n_epochs):
             task_list = np.random.permutation(len(self.target_trainer))
+            # task_list = range(len(self.target_trainer))
             if self.args.do_train:
                 for task in task_list:
                     self.train(task, epoch)
-                    # if self.args.rank == 0:
-                    #     print(torch.cuda.memory_allocated())
+                self.scheduler.step()
 
             if self.args.do_eval and epoch % self.args.evaluation_every == 0:
                 for task in task_list:
@@ -510,8 +527,7 @@ class HyperTrainer(BaseTrainer):
                     logger.info(f'Best is saved at epoch {epoch}')
 
         if self.args.save_model and epoch_offset < self.args.n_epochs:
-            self.model.load_state_dict(
-                torch.load(os.path.join(self.args.output_dir, f'{self.task_name}.pt')))
+            self._load_checkpoint()
 
         if self.args.do_test:
             for i in range(len(self.target_trainer)):
@@ -526,9 +542,9 @@ class HyperTrainer(BaseTrainer):
 
         if self.args.save_model:
             try:
-                ckpt = torch.load(os.path.join(self.args.output_dir, f'{self.task_name}_ckpt.pt'))
+                ckpt = self._load_checkpoint()
                 ckpt['epoch'] = self.args.n_epochs
-                torch.save(ckpt, os.path.join(self.args.output_dir, f'{self.task_name}_ckpt.pt'))
+                self._save_checkpoint(ckpt)
             except FileNotFoundError:
                 pass
         return res
@@ -549,3 +565,13 @@ def get_dataloader(dataset: Dataset, is_train: bool, is_distributed: bool, kwarg
         return DataLoader(dataset, shuffle=False, **kwargs, sampler=DistributedSampler(dataset))
     else:
         return DataLoader(dataset, shuffle=is_train, **kwargs)
+
+
+def collect_parameters(model: nn.Module, target_list: List[str]) -> Tuple[List[Any], Dict[str, torch.Size]]:
+    parameters = []
+    named_parameters = {}
+    for t in target_list:
+        parameters.extend(getattr(model, t).parameters())
+        named_parameters.update({f'{t}.{k}': v.shape for k, v in getattr(model, t).named_parameters()})
+
+    return parameters, named_parameters
