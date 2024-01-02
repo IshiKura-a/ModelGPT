@@ -6,3 +6,6 @@ test*
 
 output
 blob/config.json
+blob/amazon.txt
+blob/dslr.txt
+blob/webcam.txt

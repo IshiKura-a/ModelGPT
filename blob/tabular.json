@@ -1,0 +1,72 @@
+{
+  "Iris": [
+    "This is a task of tabular classification to recognize which type of iris plant the input is.",
+    "This is a task of tabular classification to recognize which type of iris plant the input is.",
+    "This is a task of tabular classification to recognize which type of iris plant the input is.",
+    "This is a task of tabular classification to recognize which type of iris plant the input is.",
+    "This is a task of tabular classification to recognize which type of iris plant the input is."
+  ],
+  "HeartDisease": [
+    "This is a task of binary classification to predict the presence or absence of heart disease based on the given input features.",
+    "This is a task of tabular classification to recognize the presence of heart disease based on various medical attributes.",
+    "This is a task of binary classification to predict the presence or absence of heart disease based on the given input features.",
+    "This is a task of binary classification to predict whether a person has heart disease or not based on their medical attributes.",
+    "This is a task of binary classification to predict the presence or absence of heart disease based on the input features."
+  ],
+  "Wine": [
+    "This is a task of tabular classification to recognize the type of wine based on its chemical properties.",
+    "This is a task of tabular classification to recognize which type of wine the input is.",
+    "This is a task of tabular classification to recognize which type of wine the input is.",
+    "This is a task of tabular classification to recognize the type of wine based on its chemical properties.",
+    "This is a task of tabular classification to recognize the type of wine based on its chemical properties."
+  ],
+  "Adult": [
+    "This is a task of binary classification to predict whether an individual's income is above or below $50K based on various demographic and employment features.",
+    "This is a task of binary classification to predict whether an individual's income is above or below $50,000 based on various demographic and employment features.",
+    "This is a task of binary classification to predict whether an individual's income is above or below $50,000 based on various demographic and employment features.",
+    "This is a task of binary classification to predict whether a person's income is above or below $50,000 based on various demographic and employment features.",
+    "This is a task of binary classification to predict whether an individual's income is above or below $50,000 based on various demographic and employment features."
+  ],
+  "BreastCancer": [
+    "This is a task of tabular classification to recognize whether the breast cancer is benign or malignant.",
+    "This is a task of tabular classification to recognize whether a breast cancer tumor is benign or malignant.",
+    "This is a task of tabular classification to recognize whether a breast cancer sample is malignant or benign.",
+    "This is a task of tabular classification to recognize whether the breast cancer is benign or malignant.",
+    "This is a task of tabular classification to recognize whether a breast cancer tumor is benign or malignant."
+  ],
+  "CarEvaluation": [
+    "This is a task of tabular classification to evaluate the acceptability of car purchases based on various attributes.",
+    "This is a task of tabular classification to evaluate the acceptability of car based on various features.",
+    "This is a task of tabular classification to evaluate the acceptance level of car based on various features.",
+    "This is a task of tabular classification to evaluate the acceptance level of car based on its buying, maintenance, doors, persons, luggage boot, and safety attributes.",
+    "This is a task of tabular classification to evaluate the acceptability of car based on various features."
+  ],
+  "WineQuality": [
+    "This is a task of regression to predict the quality score of wine based on its chemical properties.",
+    "This is a task of regression to predict the quality of wine based on its chemical properties.",
+    "This is a task of regression to predict the quality rating of wine based on its chemical properties.",
+    "This is a task of regression to predict the quality rating of wine based on its chemical properties.",
+    "This is a task of regression to predict the quality rating of wine based on its chemical properties."
+  ],
+  "DryBean": [
+    "This is a task of multi-class classification to recognize the type of dry bean based on its features.",
+    "This is a task of tabular classification to recognize the type of dry bean based on its various physical attributes.",
+    "This is a task of tabular classification to recognize which type of dry bean the input is.",
+    "This is a task of multi-class classification to recognize the type of dry bean based on its features.",
+    "This is a task of multi-class classification to recognize the type of dry bean based on its features."
+  ],
+  "Rice": [
+    "This is a task of tabular classification to recognize which type of rice variety the input is.",
+    "This is a task of tabular classification to recognize which type of rice the input is.",
+    "This is a task of tabular classification to recognize which type of rice variety the input is.",
+    "This is a task of tabular classification to recognize which type of rice variety the input is.",
+    "This is a task of tabular classification to recognize which type of rice variety the input is."
+  ],
+  "BankMarketing": [
+    "This is a task of binary classification to predict whether a customer will subscribe to a term deposit in a bank marketing campaign.",
+    "This is a task of binary classification to predict whether a customer will subscribe to a term deposit in a bank marketing campaign.",
+    "This is a task of binary classification to determine whether a client will subscribe to a term deposit in a bank marketing campaign.",
+    "This is a task of binary classification to predict whether a customer will subscribe to a term deposit in a bank marketing campaign.",
+    "This is a task of binary classification to predict whether a customer will subscribe to a term deposit in a bank marketing campaign."
+  ]
+}

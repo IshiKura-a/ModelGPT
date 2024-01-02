@@ -20,13 +20,23 @@ class Datasets(Enum):
     CIFAR100 = 'cifar100'
     CIFAR10 = 'cifar10'
     Caltech256 = 'caltech256'
+    Iris = '53'
+    HeartDisease = '45'
+    Wine = '109'
+    Adult = '2'
+    BreastCancer = '17'
+    CarEvaluation = '19'
+    WineQuality = '186'
+    DryBean = '602'
+    Rice = '545'
+    BankMarketing = '222'
     Default = 'default'
 
 
 def get_transform(img_size: int, is_train: bool, normalize: Optional[List] = DEFAULT_NORMALIZE) -> transforms.Compose:
     transform = [
         transforms.Resize((img_size, img_size)),
-        transforms.RandomCrop((img_size, img_size), padding=4),
+        transforms.RandomCrop((img_size, img_size)),
         transforms.RandomHorizontalFlip(),
         transforms.ToTensor()
     ] if is_train else [

@@ -1,4 +1,5 @@
 import functools
+from typing import Dict
 
 
 def rsetattr(obj, attr, val):
@@ -11,3 +12,9 @@ def rgetattr(obj, attr, *args):
         return getattr(obj, attr, *args)
 
     return functools.reduce(_getattr, [obj] + attr.split('.'))
+
+
+def dict2str(d: Dict) -> str:
+    return ' '.join([
+        f'{k} = {v.item() if hasattr(v, "item") else v}' for k, v in d.items()
+    ])

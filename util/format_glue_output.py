@@ -5,7 +5,7 @@ from dataset.glue import key2labels
 
 
 def main():
-    base_dir = f'/data/tangzihao/model/modelGPT/mh_in_one'
+    base_dir = f'/root/data/model/modelGPT/distilbert_lora_hyn_mh/finetune'
     task_name = ['cola', 'mnli', 'mrpc', 'qnli', 'qqp', 'rte', 'sst2', 'stsb', 'wnli', 'mnli-mm', 'ax']
     output_name = ['CoLA', 'MNLI-m', 'MRPC', 'QNLI', 'QQP', 'RTE', 'SST-2', 'STS-B', 'WNLI', 'MNLI-mm', 'AX']
     Path(os.path.join(base_dir, 'output')).mkdir(exist_ok=True)

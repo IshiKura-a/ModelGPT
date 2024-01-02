@@ -1,0 +1,23 @@
+{
+  "amazon": [
+    "This is a multi-class image classification task where each product is presented against a plain background, typically white, which is a common visual pattern for online retail platforms like Amazon.",
+    "This is a multi-class image classification task, where each product is presented against a white or light-colored background, consistent with standard e-commerce product photography.",
+    "This is a multi-class image classification task where each product is presented against a plain background, typically seen in e-commerce product photography.",
+    "This is a multi-class image classification task, where each product is presented against a white or neutral background, consistent with standard e-commerce imagery.",
+    "This is a multi-class image classification task where each product is presented against a white background, consistent with standard e-commerce imagery for clear product identification."
+  ],
+  "dslr": [
+    "This is a multi-class image classification task featuring office and personal items, with each image demonstrating a shallow depth of field and selective focus typical of DSLR photography.",
+    "This is a multi-class image classification task where each image features a single office or personal item, typically centered, against a plain background, taken with a DSLR camera that provides a shallow depth of field.",
+    "This is a multi-class image classification task, where each DSLR-captured image features office and personal items with a shallow depth of field, resulting in a focused subject against a softly blurred background.",
+    "This is a multi-class image classification task, where each image features office and personal items with a shallow depth of field and soft focus, typical of DSLR photography with a wide aperture setting.",
+    "This is a multi-class image classification task, where each image features office-related items with a shallow depth of field, a characteristic effect of using a DSLR camera."
+  ],
+  "webcam": [
+    "This is a multi-class image classification task, where each image is characterized by low resolution and a grainy texture, typical of images captured with a webcam camera.",
+    "This is a multi-class image classification task with images exhibiting low resolution and lighting artifacts, typical of webcam-captured photos.",
+    "This is a multi-class image classification task, where the common visual pattern is the presence of office-related items captured with low resolution and lighting artifacts typical of webcam photography.",
+    "This is a multi-class image classification task where each image exhibits a distinct soft focus and graininess, indicative of the lower resolution and image quality typical of webcam cameras.",
+    "This is a multi-class image classification task where each image exhibits low resolution and image noise, typical of webcam-captured photos."
+  ]
+}

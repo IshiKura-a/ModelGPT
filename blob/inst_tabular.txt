@@ -1,0 +1,18 @@
+Suppose you are given a batch of data, which have a json as input and an output per sample. Each data sample is in one line with each part started with a special token [input] or [label].
+You are asked to describe which task is it in ONE sentence according to the data and the background given (optional). Any other output is FORBIDDEN.
+
+For example:
+Input:
+This is dataset Iris. (The first line is background info, which could be totally empty)
+[input] {{"SepalLengthCm":5.1,"SepalWidthCm":3.5,"PetalLengthCm":1.4,"PetalWidthCm":0.2}} [label] Iris-setosa
+[input] {{"SepalLengthCm":5.8,"SepalWidthCm":2.7,"PetalLengthCm":4.1,"PetalWidthCm":1}} [label] Iris-versicolor
+[input] {{"SepalLengthCm":4.9,"SepalWidthCm":2.5,"PetalLengthCm":4.5,"PetalWidthCm":1.7}} [label] Iris-virginica
+[input] {{"SepalLengthCm":5.4,"SepalWidthCm":3.4,"PetalLengthCm":1.5,"PetalWidthCm":0.4}} [label] Iris-setosa
+
+Output:
+This is a task of tabular classification to recognize which type of iris plant the input is.
+
+Mind that you should describe the batch as instructed above use ONLY 1 sentence.
+Next, I will give you a batch, act just as I instruct above.
+{}
+{}

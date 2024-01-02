@@ -3,10 +3,11 @@ import logging
 import os
 import tracemalloc
 from pathlib import Path
-from typing import Any, Tuple
+from typing import Any, Tuple, Dict, Optional
 
 import torch
 from datasets import load_dataset, Dataset, DatasetDict
+from peft import LoraConfig, TaskType, get_peft_model
 from torch import optim, is_tensor, nn
 from torch.optim.lr_scheduler import ConstantLR, CosineAnnealingLR
 from torch.utils.data import DataLoader, DistributedSampler
@@ -14,17 +15,26 @@ from torch import multiprocessing as mp
 from torch import distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 from tqdm import tqdm
-from transformers import DistilBertTokenizer, DistilBertForSequenceClassification, AutoConfig, AutoTokenizer, \
-    AutoModelForSequenceClassification, DistilBertModel, PreTrainedTokenizer
+from torchsummary import summary
+from transformers import AutoConfig, AutoTokenizer, AutoModelForSequenceClassification, PreTrainedTokenizer, AutoModel
 # import bitsandbytes as bnb
 from baseline.glue import preprocess_fn
 from dataset.glue import get_preprocess_fn, get_num_labels
-from model.hyper_network import DistilBertFCHYN, HyperNetwork, MultiHeadLMFCHYN
+from model.hyper_network import DistilBertFCHYN, HyperNetwork, MultiHeadLMFCHYN, LMMLPHyperNetwork
 from model.summarizer import MockSummarizer
 from util.criteria import CrossEntropy, Accuracy, Compose, MSELoss
 from util.logger import print_args, logger
 from util.trainer import TrainingArguments, Trainer, seed_everything, HyperTrainer, get_dataloader, \
-    collect_parameters
+    collect_parameters, collect_trainable_parameters
+
+
+def get_n_local_updates(task_name: str):
+    if task_name in ['wnli', 'rte']:
+        return 5
+    elif task_name in ['stsb', 'cola', 'mrpc']:
+        return 3
+    else:
+        return 1
 
 
 def task_init(task_name: str, args: argparse.Namespace) -> Tuple[nn.Module, PreTrainedTokenizer, DatasetDict]:
@@ -44,6 +54,7 @@ def task_init(task_name: str, args: argparse.Namespace) -> Tuple[nn.Module, PreT
         desc='Running tokenizer on dataset',
     )
     d.set_format("pt", columns=["input_ids", "attention_mask"], output_all_columns=True)
+
     return model, tokenizer, d
 
 
@@ -57,18 +68,16 @@ def main(rank: int, world_size: int, args: argparse.Namespace):
 
     trainers = []
     target_parameter = {}
-    task_list = ['stsb']
-    # task_list = ['cola', 'mnli', 'mrpc', 'qnli', 'qqp', 'rte', 'sst2', 'stsb', 'wnli']
-    # task_list = ['cola', 'mrpc', 'qnli', 'rte', 'sst2', 'stsb', 'wnli']
+    # task_list = ['stsb']
+    task_list = ['cola', 'mnli', 'mrpc', 'qnli', 'qqp', 'rte', 'sst2', 'stsb', 'wnli']
+    # task_list = ['cola', 'mrpc',  'rte', 'stsb', 'wnli']
     if rank == 0:
         task_list = tqdm(task_list)
-    for task_name in task_list:
-        if rank == 0:
-            task_list.set_description(f'Current: {task_name}')
+    for idx, task_name in enumerate(task_list):
         num_labels = get_num_labels(task_name)
         if num_labels == 1:
             criteria = MSELoss()
-            eval_metrics = MSELoss()
+            eval_metrics = Compose([MSELoss()])
         else:
             criteria = CrossEntropy()
             eval_metrics = Compose([CrossEntropy(), Accuracy()])
@@ -84,16 +93,26 @@ def main(rank: int, world_size: int, args: argparse.Namespace):
             val_loader['mnli-mm'] = get_dataloader(d['validation_mismatched'], False, args.mp, loader_kwargs)
             test_loader['mnli-mm'] = get_dataloader(d['test_mismatched'], False, args.mp, loader_kwargs)
             test_loader['ax'] = get_dataloader(ax_d['test'], False, args.mp, loader_kwargs)
-        train_args = TrainingArguments(do_train=False,
-                                       do_eval=False,
-                                       do_test=False,
+        train_args = TrainingArguments(do_train=True,
+                                       do_eval=True,
+                                       do_test=True,
                                        n_epochs=0,
                                        mp=args.mp,
                                        rank=rank)
-        parameters, t = collect_parameters(model, ['pre_classifier', 'classifier'])
-        target_parameter[task_name] = t
+
+        lora_config = LoraConfig(
+            r=args.lora_r,
+            lora_alpha=args.lora_alpha,
+            lora_dropout=0.05,
+            bias="none",
+            task_type=TaskType.SEQ_CLS,
+            target_modules=args.target_modules
+        )
+        model = get_peft_model(model, lora_config)
+        p, t = collect_trainable_parameters(model)
+        target_parameter[task_name] = {k: v.shape for k, v in t.items()}
         # model = DDP(model.cuda()) if args.mp else model.cuda()
-        optimizer = optim.Adam(parameters, lr=args.t_lr, weight_decay=args.t_wd)
+        optimizer = optim.Adam(p, lr=args.t_lr, weight_decay=args.t_wd, amsgrad=True)
         scheduler = ConstantLR(optimizer)
         trainer = Trainer(args=train_args,
                           model=model,
@@ -106,57 +125,66 @@ def main(rank: int, world_size: int, args: argparse.Namespace):
                           criteria=criteria,
                           eval_metrics=eval_metrics,
                           save_best=None,
+                          n_local_updates=get_n_local_updates(task_name),
+                          preprocessing=preprocess_fn
                           )
         trainers.append(trainer)
+
+        if rank == 0:
+            trainable_params, all_param = model.get_nb_trainable_parameters()
+            task_list.set_description(
+                f'Current: {task_name} trainable params: {trainable_params:,d} || all params: {all_param:,d} || trainable%: {100 * trainable_params / all_param}')
         del tokenizer
 
-    train_args = TrainingArguments(do_train=True,
-                                   do_eval=True,
+    train_args = TrainingArguments(do_train=False,
+                                   do_eval=False,
                                    do_test=True,
                                    output_dir=args.output_dir,
                                    n_epochs=args.epoch,
                                    save_model=True,
                                    mp=args.mp,
-                                   rank=rank)
-    encoder = DistilBertModel.from_pretrained(args.backbone)
-    tokenizer = DistilBertTokenizer.from_pretrained(args.backbone)
+                                   rank=rank,
+                                   is_pred=True)
+    encoder = AutoModel.from_pretrained(args.backbone)
+    tokenizer = AutoTokenizer.from_pretrained(args.backbone)
 
     if rank == 0:
-        logger.info(f'target_parameters: {target_parameter}')
-    net = MultiHeadLMFCHYN(encoder=encoder,
-                           embedding_size=768,
-                           hidden_dim=512,
-                           target_parameter=target_parameter,
-                           # split_model=True
-                           )
-    net = DDP(net.cuda(), gradient_as_bucket_view=True) if args.mp else net.cuda()
+        logger.info(f'target_parameters: {target_parameter[list(target_parameter.keys())[0]].keys()}')
 
-    optimizer = optim.Adam(net.parameters(), lr=args.lr, weight_decay=args.wd)
-    # optimizer = bnb.optim.Adam8bit(net.parameters(), lr=args.lr, weight_decay=args.wd)
-    scheduler = CosineAnnealingLR(optimizer, T_max=args.epoch)
-    # scheduler = ConstantLR(optimizer)
+    def best_metric(cur: Dict, prev: Optional[Dict]):
+        cal_avg_loss = lambda x: sum([v['CE'] if 'CE' in v else v['MSE'] for v in x.values()]) / len(x)
+        if prev is None:
+            return True
+        else:
+            return cal_avg_loss(cur) < cal_avg_loss(prev)
+
+    net = LMMLPHyperNetwork(encoder=encoder,
+                            embedding_size=768,
+                            hidden_dim=args.hidden_dim,
+                            target_parameter=target_parameter,
+                            )
+    net.load_state_dict(torch.load(f'/root/data/model/modelGPT/distilbert_lora_hyn_mh/DistilBertLora.pt'))
+    logger.info(net)
+    net = DDP(net.cuda(), gradient_as_bucket_view=True) if args.mp else net.cuda()
+    optimizer = optim.Adam(net.parameters(), lr=args.lr, weight_decay=args.wd, amsgrad=True)
+    # p, _ = collect_parameters(net, ['mlp', 'task_head'])
+    # optimizer = optim.Adam(p, lr=args.lr, weight_decay=args.wd)
+    # scheduler = CosineAnnealingLR(optimizer, T_max=args.epoch)
+    scheduler = ConstantLR(optimizer)
     h_trainer = HyperTrainer(args=train_args,
                              model=net,
-                             summarizer=MockSummarizer(f'./blob/description.json'),
+                             summarizer=MockSummarizer(f'./blob/seq_cls.json'),
                              target_trainer=trainers,
-                             task_name='DistilBertFC',
+                             task_name='DistilBertLora',
                              tokenizer=tokenizer,
                              optimizer=optimizer,
                              scheduler=scheduler,
                              preprocessing=preprocess_fn,
-                             n_local_updates=2,
+                             n_local_updates=args.n_local_updates,
+                             save_best=best_metric,
+                             exec_finetune=True
                              )
     h_trainer.exec()
-    # h_trainer.model.load_state_dict(torch.load(f'/data/home/tangzihao/model/modelGPT/DistilBertFC.pt'))
-    # for i in range(len(h_trainer.target_trainer)):
-    #     res_dict = h_trainer.pred(i)
-    #     for t, results in res_dict.items():
-    #         results = results.clone().detach().cpu().numpy()
-    #
-    #         with open(os.path.join(args.output_dir, f'{t}.tsv'), 'w') as f:
-    #             print(f'index\tprediction', file=f)
-    #             for j in range(results.shape[0]):
-    #                 print(f'{j}\t{results[j]}', file=f)
     if args.mp:
         dist.destroy_process_group()
 
@@ -176,38 +204,28 @@ if __name__ == '__main__':
     parser.add_argument('--mp', action='store_true', default=False)
     parser.add_argument('--seed', type=int, default=2024)
     parser.add_argument('--backbone', type=str, default='/root/data/model/distilbert-base-uncased')
-    parser.add_argument('--output_dir', type=str, default=f'/root/data/model/modelGPT/nlp')
+    parser.add_argument('--hidden_dim', type=int, default=768)
+    parser.add_argument('--output_dir', type=str, default=f'/root/data/model/modelGPT/distilbert_lora_hyn_mh')
 
-    parser.add_argument('--lr', type=float, default=5e-5)
-    parser.add_argument('--wd', type=float, default=0)
-    parser.add_argument('--epoch', type=int, default=8)
-    parser.add_argument('--batch_size', type=int, default=16)
-    parser.add_argument('--t_lr', type=float, default=1e-5)
-    parser.add_argument('--t_wd', type=float, default=0)
+    parser.add_argument('--lr', type=float, default=1e-5)
+    parser.add_argument('--wd', type=float, default=0.0001)
+    parser.add_argument('--epoch', type=int, default=50)
+    parser.add_argument('--batch_size', type=int, default=256)
+    parser.add_argument('--t_lr', type=float, default=1e-4)
+    parser.add_argument('--t_wd', type=float, default=1e-4)
+    parser.add_argument('--n_local_updates', type=int, default=1)
+
+    parser.add_argument('--lora_r', type=int, default=16)
+    parser.add_argument('--lora_alpha', type=int, default=32)
+    parser.add_argument('--target_modules', type=str, default=r'.*[qv]_lin')
 
     args = parser.parse_args()
 
     Path(args.output_dir).mkdir(parents=True, exist_ok=True)
-    logger.addHandler(logging.FileHandler(f'{args.output_dir}/result.log', mode='w'))
+    # logger.addHandler(logging.FileHandler(f'{args.output_dir}/result.log', mode='w'))
     print_args(args)
     if args.mp:
         world_size = torch.cuda.device_count()
         mp.spawn(main, (world_size, args), nprocs=world_size)
     else:
         main(0, 1, args)
-    # tracemalloc.start()
-    # try:
-    #     if args.mp:
-    #         world_size = torch.cuda.device_count()
-    #         mp.spawn(main, (world_size, args), nprocs=world_size)
-    #     else:
-    #         main(0, 1, args)
-    # except Exception:
-    #     print(torch.cuda.memory_summary())
-    #     import gc
-    #     for obj in gc.get_objects():
-    #         try:
-    #             if torch.is_tensor(obj) or (hasattr(obj, 'data') and torch.is_tensor(obj.data)):
-    #                 print(type(obj), obj.size())
-    #         except:
-    #             pass

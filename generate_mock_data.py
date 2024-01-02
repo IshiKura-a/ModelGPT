@@ -4,9 +4,9 @@ import numpy as np
 from datasets import load_dataset
 
 from dataset.glue import key2labels
-from model.summarizer import LLMBackbone, LLMAPISummarizer, Instruction
+from model.summarizer import LLMBackbone, SeqCLSSummarizer, Instruction
 
-s = LLMAPISummarizer(LLMBackbone.turbo, Instruction.serial)
+s = SeqCLSSummarizer(LLMBackbone.turbo, Instruction.serial)
 tasks = list(key2labels.keys())
 tasks.remove('ax')
 

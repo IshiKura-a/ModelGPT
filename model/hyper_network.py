@@ -6,8 +6,7 @@ import torch
 from torch import nn, Tensor
 from torch.nn.utils import spectral_norm
 from torchvision.models import ResNet
-from transformers import DistilBertModel
-
+from transformers import DistilBertModel, AutoModel
 
 class HyperNetwork(nn.Module):
     def __init__(self, encoder: nn.Module, embedding_size: int, hidden_dim: int,
@@ -24,10 +23,20 @@ class HyperNetwork(nn.Module):
     def forward(self, inputs: Tensor) -> Dict:
         raise NotImplementedError()
 
-
-class TinyEncoder(nn.Module):
-    def __init__(self, ):
-        super().__init__()
+    @staticmethod
+    def _divide_target_parameter(target_parameter: Dict[str, Dict[str, torch.Size]]):
+        unified_parameter = {}
+        customized_parameter = {}
+        customized_map = {n: {} for n in target_parameter.keys()}
+        for k, v in list(target_parameter.values())[0].items():
+            s = set([target_parameter[n][k] for n in target_parameter.keys()])
+            if len(s) == 1:
+                unified_parameter[k] = v
+            else:
+                customized_parameter[k] = max(s, key=lambda q: reduce(lambda x, y: x * y, list(q)))
+                for n in target_parameter.keys():
+                    customized_map[n][k] = target_parameter[n][k]
+        return unified_parameter, customized_parameter, customized_map
 
 
 class DistilBertFCHYN(HyperNetwork):
@@ -102,6 +111,49 @@ class ParameterGenerationBlock(nn.Module):
         }
 
 
+# class VariableParameterGenerationBlock(nn.Module):
+#     def __init__(self,
+#                  hidden_dim: int,
+#                  target_parameter: Dict[str, torch.Size],
+#                  customized_map: Dict[str, Dict[str, torch.Size]]):
+#         super().__init__()
+#         self.hidden_dim = hidden_dim
+#         self.target_parameter = target_parameter
+#         self.param_map = nn.ModuleDict({
+#             k.replace('.', '#'): nn.Linear(hidden_dim, reduce(lambda x, y: x * y, list(v))) for k, v in
+#             target_parameter.items()
+#         })
+#         self.customized_map = customized_map
+#
+#     def forward(self, inputs: Tensor, **kwargs) -> Dict:
+#         task = kwargs['task_name']
+#         m = self.customized_map[task]
+#         # TODO: here batch opt is not supported
+#         return {k: self.param_map[k.replace('.', '#')](inputs)[:, :reduce(lambda x, y: x * y, list(m[k]))].view(m[k])
+#                 for k in self.target_parameter.keys()}
+
+
+class VariableParameterGenerationBlock(nn.Module):
+    def __init__(self,
+                 hidden_dim: int,
+                 target_parameter: Dict[str, torch.Size],
+                 customized_map: Dict[str, Dict[str, torch.Size]]):
+        super().__init__()
+        self.hidden_dim = hidden_dim
+        self.target_parameter = target_parameter
+
+        self.param_map = nn.ModuleDict({
+            n: ParameterGenerationBlock(hidden_dim, p) for n, p in customized_map.items()
+        })
+        self.customized_map = customized_map
+
+    def forward(self, inputs: Tensor, **kwargs) -> Dict:
+        task = kwargs['task_name']
+        m = self.customized_map[task]
+        res = self.param_map[task](inputs)
+        return {k: res[k].view(m[k]) for k in self.target_parameter.keys()}
+
+
 class MultiHeadLMFCHYN(HyperNetwork):
     def __init__(self,
                  encoder: DistilBertModel,
@@ -153,3 +205,41 @@ class MultiHeadLMFCHYN(HyperNetwork):
             self.task_head.to('cuda:1')
         else:
             super().to(*args, **kwargs)
+
+
+class LMMLPHyperNetwork(HyperNetwork):
+    def __init__(self,
+                 encoder: nn.Module,
+                 embedding_size: int,
+                 hidden_dim: int,
+                 target_parameter: Dict[str, Dict[str, torch.Size]],
+                 split_model: bool = False
+                 ):
+        super().__init__(encoder, embedding_size, hidden_dim, target_parameter, split_model)
+
+        hidden_size = [hidden_dim, hidden_dim, hidden_dim]
+
+        layers = []
+        prev_size = embedding_size
+        for h in hidden_size:
+            layers.extend([
+                nn.LeakyReLU(inplace=True),
+                spectral_norm(nn.Linear(prev_size, h)),
+                nn.Dropout(0.1, inplace=True),
+            ])
+            prev_size = h
+        layers.append(nn.LeakyReLU(inplace=True))
+
+        self.mlp = nn.Sequential(*layers)
+        self.target_parameter = target_parameter
+
+        unified_para, customized_para, customized_map = self._divide_target_parameter(target_parameter)
+        self.task_head = ParameterGenerationBlock(self.hidden_dim, unified_para)
+        self.customized_head = VariableParameterGenerationBlock(self.hidden_dim, customized_para, customized_map)
+
+    def forward(self, **kwargs) -> Dict:
+        task = kwargs['task_name']
+        del kwargs['task_name']
+        x = self.encoder(**kwargs)[0][:, 0]
+        x = self.mlp(x)
+        return {**self.task_head(x), **self.customized_head(x, task_name=task)}
