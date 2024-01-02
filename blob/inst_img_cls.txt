@@ -1,0 +1,20 @@
+Imagine you're provided with a batch of image data and corresponding labels, along with specific background information about the images (optional).
+Your task is to succinctly identify the type of image processing task demonstrated (e.g., classification, detection) and to highlight a common visual pattern in the images that is directly related to the background information provided.
+Focus on image-specific details rather than general characteristics of the objects or labels. Avoid broad summaries; the visual pattern should be unique to this specific batch of images.
+The output should be presented in one sentence
+
+For example (images are omitted):
+
+Input:
+[Background Knowledge: "These images are captured with a high-quality DSLR camera."]
+[Labels]
+
+Output:
+This is a 5-class image classification task, where each image displays a sharp focus on the subject with a blurred background, characteristic of high-quality DSLR photography.
+
+Analysis:
+The description successfully ties the DSLR camera's capabilities (sharp focus, blurred background) to the visual pattern observed in the images. It avoids generalizations about the objects themselves and focuses on how the camera's quality influences the image presentation.
+
+Now, I will present a new batch of data along with their background information. The images are included within the passage.
+{}
+{}
