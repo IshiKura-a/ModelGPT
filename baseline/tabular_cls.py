@@ -11,6 +11,7 @@ from typing import Optional, Dict, Any, Tuple
 
 import torch
 from pandas import DataFrame
+from peft import LoraConfig, get_peft_model
 from sklearn import preprocessing
 from torch import optim, nn
 from torch.optim.lr_scheduler import ConstantLR
@@ -69,6 +70,12 @@ def main():
     parser.add_argument('--epoch', type=int, default=20)
     parser.add_argument('--batch_size', type=int, default=64)
 
+    parser.add_argument('--lora_r', type=int, default=4)
+    parser.add_argument('--lora_alpha', type=int, default=8)
+    parser.add_argument('--lora_dropout', type=int, default=0.1)
+    parser.add_argument('--target_modules', type=str, default=r'mlp\.\d\.*')
+    parser.add_argument('--modules_to_save', type=str, default=r'')
+
     args = parser.parse_args()
     args.output_dir = os.path.join(args.output_dir, 'mlp', args.dataset.name)
     Path(args.output_dir).mkdir(parents=True, exist_ok=True)
@@ -109,6 +116,16 @@ def main():
                 out_dim=out_dim,
                 hidden_dim=8,
                 n_layers=4)
+
+    lora_config = LoraConfig(
+        r=args.lora_r,
+        lora_alpha=args.lora_alpha,
+        lora_dropout=args.lora_dropout,
+        bias="none",
+        target_modules=args.target_modules,
+        modules_to_save=args.modules_to_save,
+    )
+    model = get_peft_model(model, lora_config)
 
     train_args = TrainingArguments(do_train=True,
                                    do_eval=True,

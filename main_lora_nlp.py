@@ -136,8 +136,8 @@ def main(rank: int, world_size: int, args: argparse.Namespace):
                 f'Current: {task_name} trainable params: {trainable_params:,d} || all params: {all_param:,d} || trainable%: {100 * trainable_params / all_param}')
         del tokenizer
 
-    train_args = TrainingArguments(do_train=False,
-                                   do_eval=False,
+    train_args = TrainingArguments(do_train=True,
+                                   do_eval=True,
                                    do_test=True,
                                    output_dir=args.output_dir,
                                    n_epochs=args.epoch,
@@ -152,11 +152,11 @@ def main(rank: int, world_size: int, args: argparse.Namespace):
         logger.info(f'target_parameters: {target_parameter[list(target_parameter.keys())[0]].keys()}')
 
     def best_metric(cur: Dict, prev: Optional[Dict]):
-        cal_avg_loss = lambda x: sum([v['CE'] if 'CE' in v else v['MSE'] for v in x.values()]) / len(x)
+        cal_avg_loss = lambda x: sum([v['Acc'] if 'Acc' in v else -v['MSE'] for v in x.values()]) / len(x)
         if prev is None:
             return True
         else:
-            return cal_avg_loss(cur) < cal_avg_loss(prev)
+            return cal_avg_loss(cur) > cal_avg_loss(prev)
 
     net = LMMLPHyperNetwork(encoder=encoder,
                             embedding_size=768,
@@ -205,7 +205,7 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=2024)
     parser.add_argument('--backbone', type=str, default='/root/data/model/distilbert-base-uncased')
     parser.add_argument('--hidden_dim', type=int, default=768)
-    parser.add_argument('--output_dir', type=str, default=f'/root/data/model/modelGPT/distilbert_lora_hyn_mh')
+    parser.add_argument('--output_dir', type=str, default=f'/root/data/model/modelGPT/distilbert_lora_hyn_0118')
 
     parser.add_argument('--lr', type=float, default=1e-5)
     parser.add_argument('--wd', type=float, default=0.0001)
@@ -222,7 +222,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     Path(args.output_dir).mkdir(parents=True, exist_ok=True)
-    # logger.addHandler(logging.FileHandler(f'{args.output_dir}/result.log', mode='w'))
+    logger.addHandler(logging.FileHandler(f'{args.output_dir}/result.log', mode='w'))
     print_args(args)
     if args.mp:
         world_size = torch.cuda.device_count()

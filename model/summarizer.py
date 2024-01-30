@@ -262,10 +262,12 @@ def main(test_module, **kwargs):
 
     if "tabular" in test_module:
         m = TabularSummarizer(model=LLMBackbone.turbo, inst=Instruction.tabular)
-        for _d in [Datasets.Iris, Datasets.HeartDisease, Datasets.Wine, Datasets.Adult, Datasets.BreastCancer,
-                   Datasets.CarEvaluation, Datasets.WineQuality, Datasets.DryBean, Datasets.Rice,
-                   Datasets.BankMarketing]:
-            d = fetch_ucirepo(id=_d.value)
+        cand = [Datasets.Iris, Datasets.HeartDisease, Datasets.Wine, Datasets.Adult, Datasets.BreastCancer,
+                Datasets.CarEvaluation, Datasets.WineQuality, Datasets.DryBean, Datasets.Rice,
+                Datasets.BankMarketing]
+        # cand = [Datasets.CarEvaluation]
+        for _d in cand:
+            d = fetch_ucirepo(id=int(_d.value))
             x = d.data.features
             y = d.data.targets
 

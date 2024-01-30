@@ -117,7 +117,7 @@ def main(rank: int, world_size: int, args: Namespace):
                           criteria=criteria,
                           eval_metrics=eval_metrics,
                           save_best=None,
-                          n_local_updates=2 if task_name == 'dslr' else 1,
+                          n_local_updates=2 if task_name in ['dslr', 'webcam'] else 1,
                           preprocessing=preprocess_fn
                           )
         trainers.append(trainer)
@@ -144,7 +144,7 @@ def main(rank: int, world_size: int, args: Namespace):
                             hidden_dim=args.hidden_dim,
                             target_parameter=target_parameter
                             )
-    # net.load_state_dict(torch.load(f'/root/data/model/modelGPT/img_cls_lora_hyn/ResNet50Lora.pt'))
+    # net.load_state_dict(torch.load(f'/root/data/model/modelGPT/img_cls_zeroshot_AW/ResNet50Lora.pt'))
     logger.info(net)
     p, n = collect_trainable_parameters(net)
     optimizer = optim.Adam(p, lr=args.lr, weight_decay=args.wd, amsgrad=True)
@@ -161,7 +161,8 @@ def main(rank: int, world_size: int, args: Namespace):
                              preprocessing=preprocess_fn,
                              n_local_updates=args.n_local_updates,
                              save_best=best_metric,
-                             exec_finetune=True
+                             exec_finetune=args.exec_finetune,
+                             finetune_epoch=args.finetune_epoch
                              )
     h_trainer.exec()
 
@@ -174,7 +175,7 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=2024)
     parser.add_argument('--backbone', type=str, default='/root/data/model/distilbert-base-uncased')
     parser.add_argument('--hidden_dim', type=int, default=128)
-    parser.add_argument('--output_dir', type=str, default=f'/root/data/model/modelGPT/img_cls_zeroshot_128')
+    parser.add_argument('--output_dir', type=str, default=f'/root/data/model/modelGPT/img_cls_zeroshot_AD')
 
     parser.add_argument('--model', type=str, choices=list_models(), default='resnet50')
     parser.add_argument('--lr', type=float, default=1e-4)
@@ -195,6 +196,9 @@ if __name__ == '__main__':
     parser.add_argument('--lora_dropout', type=int, default=0.1)
     parser.add_argument('--target_modules', type=str, default=r'layer.\..\.conv.')
     parser.add_argument('--modules_to_save', type=str, default=r'fc')
+
+    parser.add_argument('--exec_finetune', action='store_true', default=True)
+    parser.add_argument('--finetune_epoch', type=int, default=1)
 
     args = parser.parse_args()
 

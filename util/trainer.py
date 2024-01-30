@@ -414,7 +414,8 @@ class HyperTrainer(BaseTrainer):
                  eval_metrics: Optional[Metric] = None,
                  save_best: Optional[Callable[[Any, Any], bool]] = None,
                  preprocessing: Callable[[Any, str], Any] = BaseTrainer.default_fn,
-                 exec_finetune: bool = False):
+                 exec_finetune: bool = False,
+                 finetune_epoch: int = 1):
         super().__init__(model, task_name, args, train_loader, val_loader, test_loader, scheduler, optimizer, criteria,
                          eval_metrics, save_best, preprocessing)
 
@@ -423,6 +424,7 @@ class HyperTrainer(BaseTrainer):
         self.tokenizer = tokenizer
         self.n_local_updates = n_local_updates
         self.exec_finetune = exec_finetune
+        self.finetune_epoch = finetune_epoch
 
     def train(self, task: int, epoch: int):
         tt = self.target_trainer[task]
@@ -710,7 +712,17 @@ class HyperTrainer(BaseTrainer):
                     m.bias.requires_grad = False
 
         tt.model.train = functools.partial(train, tt.model)
-        tt.train(epoch=-1)
+        best_metrics = None
+        for _ in range(self.finetune_epoch):
+            tt.train(epoch=_)
+            metrics = {k: tt.eval(epoch=_, loader=v, return_results=False).get_results() for k, v in tt.val_loader.items()}
+            # tt.eval(epoch=-1, loader=list(tt.test_loader.values())[0], return_results=False)
+            if self.save_best and self.save_best(metrics, best_metrics):
+                best_metrics = metrics
+                logger.info(f'Best checkpoint saved at Epoch {_}.')
+                torch.save(tt.model.state_dict(), os.path.join(self.args.output_dir, f'{tt.task_name}_ft.pt'))
+
+        tt.model.load_state_dict(torch.load(os.path.join(self.args.output_dir, f'{tt.task_name}_ft.pt')))
 
         with torch.no_grad():
             res_dict = {}

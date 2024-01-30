@@ -82,7 +82,7 @@ def main():
 
     model = get_pretrained_model(args.model, num_classes=config.num_classes)
     if args.load_ckpt:
-        model.load_state_dict(torch.load(f'/root/data/model/modelGPT/img_cls_zeroshot_128/webcam.pt'))
+        model.load_state_dict(torch.load(f'/root/data/model/modelGPT/img_cls_zeroshot_AD/{args.domain}.pt'))
 
         def train(self, mode=True):
             type(model).train.__call__(self, mode)
