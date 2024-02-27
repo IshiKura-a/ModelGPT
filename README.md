@@ -12,7 +12,7 @@ Official Pytorch Implementation for the research paper titled "ModelGPT: Unleash
 Clone this repository and install the required packages:
 ```shell
 git clone https://github.com/IshiKura-a/ModelGPT.git
-cd AuG-KD
+cd ModelGPT
 
 conda create -n ModelGPT python=3.8
 conda activate ModelGPT
