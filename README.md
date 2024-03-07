@@ -39,6 +39,7 @@ python main_lora_nlp.py
 Hyperparameter settings are embedded into these files. Readers can also refer to Appendix A.
 
 ## Citation
+We warmly welcome any discussion in this emerging field! If you are interested in our work, you can star our project and cite our paper:
 ```bib
 @misc{tang2024modelgpt,
       title={ModelGPT: Unleashing LLM's Capabilities for Tailored Model Generation}, 
