@@ -41,12 +41,10 @@ Hyperparameter settings are embedded into these files. Readers can also refer to
 ## Citation
 We warmly welcome any discussion in this emerging field! If you are interested in our work, you can star our project and cite our paper:
 ```bib
-@misc{tang2024modelgpt,
-      title={ModelGPT: Unleashing LLM's Capabilities for Tailored Model Generation}, 
-      author={Zihao Tang and Zheqi Lv and Shengyu Zhang and Fei Wu and Kun Kuang},
-      year={2024},
-      eprint={2402.12408},
-      archivePrefix={arXiv},
-      primaryClass={cs.LG}
+@article{tang2024modelgpt,
+  title={ModelGPT: Unleashing LLM's Capabilities for Tailored Model Generation},
+  author={Tang, Zihao and Lv, Zheqi and Zhang, Shengyu and Wu, Fei and Kuang, Kun},
+  journal={arXiv preprint arXiv:2402.12408},
+  year={2024}
 }
 ```
